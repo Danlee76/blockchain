@@ -356,9 +356,7 @@ impl TicketingContract {
             }
         }
         let mut event = Self::get_event(&env, event_id)?;
-        if event.organizer != organizer {
-            return Err(Error::NotOrganizer);
-        }
+        Self::require_organizer(&event, &organizer)?;
 
         env.prng().shuffle(&mut entrants);
         let mut ticket_ids = Vec::new(&env);
@@ -396,9 +394,7 @@ impl TicketingContract {
     ) -> Result<(), Error> {
         organizer.require_auth();
         let mut event = Self::get_event(&env, event_id)?;
-        if event.organizer != organizer {
-            return Err(Error::NotOrganizer);
-        }
+        Self::require_organizer(&event, &organizer)?;
         if event.tickets_issued > 0 {
             return Err(Error::EventAlreadyStarted);
         }
@@ -424,9 +420,7 @@ impl TicketingContract {
     ) -> Result<(), Error> {
         organizer.require_auth();
         let mut event = Self::get_event(&env, event_id)?;
-        if event.organizer != organizer {
-            return Err(Error::NotOrganizer);
-        }
+        Self::require_organizer(&event, &organizer)?;
         if event.tickets_issued > 0 {
             return Err(Error::TicketsAlreadyIssued);
         }
@@ -464,9 +458,7 @@ impl TicketingContract {
             return Err(Error::InvalidPrice);
         }
         let mut event = Self::get_event(&env, event_id)?;
-        if event.organizer != organizer {
-            return Err(Error::NotOrganizer);
-        }
+        Self::require_organizer(&event, &organizer)?;
         let ticket_id = Self::mint(&env, event_id, to, tier, seat, price);
         event.tickets_issued += 1;
         env.storage()
@@ -516,9 +508,7 @@ impl TicketingContract {
     pub fn release_escrow(env: Env, organizer: Address, event_id: u64) -> Result<(), Error> {
         organizer.require_auth();
         let mut event = Self::get_event(&env, event_id)?;
-        if event.organizer != organizer {
-            return Err(Error::NotOrganizer);
-        }
+        Self::require_organizer(&event, &organizer)?;
         if !event.escrow_enabled {
             return Err(Error::EscrowNotEnabled);
         }
@@ -742,9 +732,7 @@ impl TicketingContract {
         organizer.require_auth();
         let mut ticket = Self::get_ticket(&env, ticket_id)?;
         let event = Self::get_event(&env, ticket.event_id)?;
-        if event.organizer != organizer {
-            return Err(Error::NotOrganizer);
-        }
+        Self::require_organizer(&event, &organizer)?;
         match ticket.status {
             TicketStatus::Used => return Err(Error::AlreadyUsed),
             TicketStatus::Revoked => return Err(Error::Revoked),
@@ -774,9 +762,7 @@ impl TicketingContract {
         for ticket_id in ticket_ids.iter() {
             let mut ticket = Self::get_ticket(&env, ticket_id)?;
             let event = Self::get_event(&env, ticket.event_id)?;
-            if event.organizer != organizer {
-                return Err(Error::NotOrganizer);
-            }
+            Self::require_organizer(&event, &organizer)?;
             match ticket.status {
                 TicketStatus::Used => return Err(Error::AlreadyUsed),
                 TicketStatus::Revoked => return Err(Error::Revoked),
@@ -801,9 +787,7 @@ impl TicketingContract {
         organizer.require_auth();
         let mut ticket = Self::get_ticket(&env, ticket_id)?;
         let event = Self::get_event(&env, ticket.event_id)?;
-        if event.organizer != organizer {
-            return Err(Error::NotOrganizer);
-        }
+        Self::require_organizer(&event, &organizer)?;
         ticket.status = TicketStatus::Revoked;
         Self::remove_gift_claim(&env, ticket_id);
         Self::save_ticket(&env, ticket_id, &ticket);
@@ -825,9 +809,7 @@ impl TicketingContract {
         organizer.require_auth();
         let mut ticket = Self::get_ticket(&env, ticket_id)?;
         let event = Self::get_event(&env, ticket.event_id)?;
-        if event.organizer != organizer {
-            return Err(Error::NotOrganizer);
-        }
+        Self::require_organizer(&event, &organizer)?;
         if ticket.status == TicketStatus::Used {
             return Err(Error::AlreadyUsed);
         }
@@ -855,9 +837,7 @@ impl TicketingContract {
         for ticket_id in ticket_ids.iter() {
             let mut ticket = Self::get_ticket(&env, ticket_id)?;
             let event = Self::get_event(&env, ticket.event_id)?;
-            if event.organizer != organizer {
-                return Err(Error::NotOrganizer);
-            }
+            Self::require_organizer(&event, &organizer)?;
             ticket.status = TicketStatus::Revoked;
             Self::remove_gift_claim(&env, ticket_id);
             Self::save_ticket(&env, ticket_id, &ticket);
@@ -1024,6 +1004,13 @@ impl TicketingContract {
             return Err(Error::NotAdmin);
         }
         admin.require_auth();
+        Ok(())
+    }
+
+    fn require_organizer(event: &Event, organizer: &Address) -> Result<(), Error> {
+        if event.organizer != *organizer {
+            return Err(Error::NotOrganizer);
+        }
         Ok(())
     }
 
