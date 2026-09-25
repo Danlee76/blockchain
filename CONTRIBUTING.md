@@ -16,6 +16,29 @@ cargo test -p stellar-tickets-ticketing
 - `cargo test --workspace`
 - `stellar contract build` to confirm the wasm still builds
 
+## Dependency versioning
+
+### soroban-sdk pinning policy
+
+The workspace pins `soroban-sdk` to a major version in [`Cargo.toml`](Cargo.toml):
+
+```toml
+[workspace.dependencies]
+soroban-sdk = "26"  # major version only, allows patch/minor updates
+```
+
+**Why:** Version bumps can change behavior, so updates should be intentional and
+reviewed. Pinning to major version allows automatic patch updates (e.g., 26.0 →
+26.1.1) while requiring explicit review for minor versions (26 → 27).
+
+**When upgrading soroban-sdk:**
+1. Bump the version in `Cargo.toml`
+2. Run `cargo test --workspace` to verify all tests pass
+3. Run `cargo clippy --all-targets -- -D warnings` to check for lint breaks
+4. Run `stellar contract build` to confirm WASM still builds
+5. Add a changelog entry documenting the upgrade and any fixes needed
+6. Open a PR describing what changed and why the upgrade was necessary
+
 ## Commit style
 
 Keep commits scoped to one logical change. Prefer imperative subject
