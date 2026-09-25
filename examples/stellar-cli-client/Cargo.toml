@@ -1,0 +1,11 @@
+[package]
+name = "stellar-tickets-cli-client-example"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Standalone example client that wraps the stellar CLI to issue and verify tickets on testnet"
+license = "MIT"
+
+# Standalone example, deliberately not a member of the contracts workspace:
+# it only depends on the stellar CLI being installed, not on any crates.
+[workspace]
