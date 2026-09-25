@@ -207,6 +207,11 @@ pub struct TicketingContract;
 impl TicketingContract {
     /// One-time setup. `payment_token` is the Stellar Asset Contract (or any
     /// SEP-41 token) used for on-chain primary sales and resale settlement.
+    ///
+    /// # Example
+    /// ```ignore
+    /// client.initialize(&admin, &payment_token_address);
+    /// ```
     pub fn initialize(env: Env, admin: Address, payment_token: Address) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(Error::AlreadyInitialized);
@@ -300,6 +305,21 @@ impl TicketingContract {
     /// Registers a new event/route/showing under an organizer. `event_id` is
     /// chosen by the caller's backend (e.g. a ULID cast to u64) so it can be
     /// correlated with the off-chain event record.
+    ///
+    /// # Example
+    /// ```ignore
+    /// client.create_event(
+    ///     &organizer,
+    ///     &1u64,
+    ///     &String::from_str(&env, "Summer Fest"),
+    ///     &String::from_str(&env, "concert"),
+    ///     &12_000u32,
+    ///     &500u32,
+    ///     &10_000u64,
+    ///     &100u64,
+    ///     &200u64,
+    /// );
+    /// ```
     pub fn create_event(
         env: Env,
         organizer: Address,
@@ -457,6 +477,18 @@ impl TicketingContract {
 
     /// Organizer-authorized issuance for tickets already paid for off-chain
     /// (card payment, comp, or fiat-to-crypto settled by the platform).
+    ///
+    /// # Example
+    /// ```ignore
+    /// let ticket_id = client.issue_ticket(
+    ///     &organizer,
+    ///     &1u64,
+    ///     &buyer,
+    ///     &String::from_str(&env, "VIP"),
+    ///     &String::from_str(&env, "A-1"),
+    ///     &5_000i128,
+    /// );
+    /// ```
     pub fn issue_ticket(
         env: Env,
         organizer: Address,
@@ -482,6 +514,17 @@ impl TicketingContract {
 
     /// Fully on-chain primary sale: buyer pays the organizer directly in
     /// `payment_token`, then the ticket is minted to the buyer atomically.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let ticket_id = client.purchase_primary(
+    ///     &buyer,
+    ///     &1u64,
+    ///     &String::from_str(&env, "GA"),
+    ///     &String::from_str(&env, "unassigned"),
+    ///     &5_000i128,
+    /// );
+    /// ```
     pub fn purchase_primary(
         env: Env,
         buyer: Address,
@@ -561,6 +604,11 @@ impl TicketingContract {
     }
 
     /// Direct, non-marketplace transfer (gift, family member, etc).
+    ///
+    /// # Example
+    /// ```ignore
+    /// client.transfer_ticket(&sender, &ticket_id, &recipient);
+    /// ```
     pub fn transfer_ticket(
         env: Env,
         from: Address,
@@ -717,6 +765,12 @@ impl TicketingContract {
     /// Read-only on-chain verification — the core fraud-prevention primitive.
     /// Any scanner/app can call this without authentication to confirm a
     /// ticket's current owner and status before admitting entry.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let ticket = client.verify_ticket(&ticket_id);
+    /// assert_eq!(ticket.status, TicketStatus::Valid);
+    /// ```
     pub fn verify_ticket(env: Env, ticket_id: u64) -> Result<Ticket, Error> {
         Self::get_ticket(&env, ticket_id)
     }
@@ -741,6 +795,11 @@ impl TicketingContract {
     /// Marks a ticket as used at the point of entry. Only the event's
     /// organizer (or their delegated gate device, via a shared Soroban
     /// signer) may check a ticket in, and only once.
+    ///
+    /// # Example
+    /// ```ignore
+    /// client.check_in(&organizer, &ticket_id);
+    /// ```
     pub fn check_in(env: Env, organizer: Address, ticket_id: u64) -> Result<(), Error> {
         organizer.require_auth();
         let mut ticket = Self::get_ticket(&env, ticket_id)?;
@@ -861,6 +920,11 @@ impl TicketingContract {
     /// Lists an owned, valid ticket on the resale marketplace. The price is
     /// capped at the event's `max_resale_multiplier_bps` of the original
     /// sale price to curb scalping.
+    ///
+    /// # Example
+    /// ```ignore
+    /// client.list_for_resale(&owner, &ticket_id, &1_100i128);
+    /// ```
     pub fn list_for_resale(
         env: Env,
         owner: Address,
@@ -895,6 +959,12 @@ impl TicketingContract {
         Ok(())
     }
 
+    /// Cancels an active resale listing, returning the ticket to Valid status.
+    ///
+    /// # Example
+    /// ```ignore
+    /// client.cancel_resale(&owner, &ticket_id);
+    /// ```
     pub fn cancel_resale(env: Env, owner: Address, ticket_id: u64) -> Result<(), Error> {
         owner.require_auth();
         let mut ticket = Self::get_ticket(&env, ticket_id)?;
@@ -913,6 +983,11 @@ impl TicketingContract {
     /// Buys a resale-listed ticket. Payment is settled atomically on-chain:
     /// the organizer's royalty cut is paid first, the remainder to the
     /// seller, then ownership transfers to the buyer.
+    ///
+    /// # Example
+    /// ```ignore
+    /// client.buy_resale(&buyer, &ticket_id);
+    /// ```
     pub fn buy_resale(env: Env, buyer: Address, ticket_id: u64) -> Result<(), Error> {
         buyer.require_auth();
         let mut ticket = Self::get_ticket(&env, ticket_id)?;
@@ -1093,3 +1168,4 @@ impl TicketingContract {
 
 #[cfg(test)]
 mod test;
+
