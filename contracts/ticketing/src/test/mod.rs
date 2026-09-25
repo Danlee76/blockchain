@@ -7,6 +7,7 @@ use soroban_sdk::{
 
 pub mod helpers;
 mod auth;
+mod budget;
 mod events;
 mod resale;
 mod tickets;
