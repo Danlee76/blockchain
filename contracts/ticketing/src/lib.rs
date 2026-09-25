@@ -1,10 +1,12 @@
 #![no_std]
 #![allow(clippy::too_many_arguments)]
 
+mod constants;
 mod error;
 mod events;
 mod types;
 
+pub use constants::{BPS_DENOMINATOR, MAX_BATCH_SIZE, PAYMENT_TOKEN_CHANGE_DELAY_LEDGERS};
 pub use error::Error;
 pub use events::{
     ContractInitialized, PaymentTokenChanged, PaymentTokenProposed, PurchaseThrottleUpdated,
@@ -14,10 +16,6 @@ pub use types::{DataKey, Event, GiftClaim, PendingPaymentToken, Ticket, TicketSt
 
 use soroban_sdk::{contract, contractimpl, token, Address, Bytes, BytesN, Env, String, Vec};
 
-pub const MAX_BATCH_SIZE: u32 = 50;
-/// Ledgers that must pass between proposing and applying a payment token
-/// change (~1 day at 5s/ledger).
-pub const PAYMENT_TOKEN_CHANGE_DELAY_LEDGERS: u32 = 17_280;
 const LEDGER_BUMP: u32 = 535_679; // ~31 days at 5s/ledger, matches other Soroban tooling defaults
 const LEDGER_THRESHOLD: u32 = 500_000;
 
@@ -167,7 +165,7 @@ impl TicketingContract {
         resale_cutoff_seconds: u64,
     ) -> Result<(), Error> {
         organizer.require_auth();
-        if royalty_bps > 10_000 {
+        if royalty_bps > BPS_DENOMINATOR {
             return Err(Error::InvalidRoyalty);
         }
         if starts_at <= env.ledger().timestamp() {
@@ -782,7 +780,8 @@ impl TicketingContract {
         if Self::resale_closed(&env, &event) {
             return Err(Error::ResaleClosed);
         }
-        let cap = ticket.original_price * event.max_resale_multiplier_bps as i128 / 10_000;
+        let cap =
+            ticket.original_price * event.max_resale_multiplier_bps as i128 / BPS_DENOMINATOR as i128;
         if price > cap {
             return Err(Error::ResalePriceExceedsCap);
         }
@@ -833,7 +832,7 @@ impl TicketingContract {
             return Err(Error::ResaleClosed);
         }
         let token_client = token::Client::new(&env, &Self::payment_token_for_event(&env, &event)?);
-        let royalty = ticket.resale_price * event.royalty_bps as i128 / 10_000;
+        let royalty = ticket.resale_price * event.royalty_bps as i128 / BPS_DENOMINATOR as i128;
         let seller_amount = ticket.resale_price - royalty;
         if royalty > 0 {
             token_client.transfer(&buyer, &event.organizer, &royalty);
