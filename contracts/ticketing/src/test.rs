@@ -129,7 +129,10 @@ fn organizer_can_reassign_a_ticket_seat() {
     );
 
     client.set_seat(&organizer, &ticket_id, &String::from_str(&env, "B4"));
-    assert_eq!(client.verify_ticket(&ticket_id).seat, String::from_str(&env, "B4"));
+    assert_eq!(
+        client.verify_ticket(&ticket_id).seat,
+        String::from_str(&env, "B4")
+    );
 }
 
 #[test]
