@@ -2,9 +2,9 @@
 
 use super::*;
 use soroban_sdk::{
-    testutils::{Address as _, Ledger},
+    testutils::{Address as _, Ledger, MockAuth, MockAuthInvoke},
     token::{StellarAssetClient, TokenClient},
-    Bytes, Env, String, Vec,
+    Bytes, Env, IntoVal, String, Vec,
 };
 
 fn setup<'a>() -> (
@@ -1944,4 +1944,129 @@ fn non_organizer_cannot_refund_revoke() {
     let impostor = Address::generate(&env);
     let result = client.try_revoke_with_refund(&impostor, &ticket_id, &true);
     assert_eq!(result, Err(Ok(Error::NotOrganizer)));
+}
+
+// ── Issue #206: authorization ordering ──────────────────────────────────────
+//
+// Every state-changing entry point in this contract calls `require_auth()`
+// as its very first statement, before any storage lookup or business-rule
+// check. This is a deliberate precedence contract, not an accident: if a
+// function instead validated its arguments (e.g. "does this ticket exist?")
+// *before* checking authorization, an unauthenticated caller could probe
+// contract state — existence of a ticket/event, its current status, who
+// owns it — without ever proving they are allowed to act on it. Checking
+// auth first means a caller who does not (or cannot) authorize learns
+// nothing beyond "not authorized", regardless of what other error the
+// business logic would otherwise have raised.
+//
+// This test does not mock authorization for the call under test, so
+// `from.require_auth()` inside `transfer_ticket` fails at the host level
+// before `get_ticket` ever runs. If the ordering were ever reversed —
+// existence checked before auth — this test would instead observe
+// `Err(Ok(Error::TicketNotFound))`, a contract-level error, rather than the
+// host-level authorization failure asserted below.
+#[test]
+fn require_auth_runs_before_business_validation() {
+    let env = Env::default();
+
+    let admin = Address::generate(&env);
+    let organizer = Address::generate(&env);
+    let unauthorized_caller = Address::generate(&env);
+    let recipient = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract_v2(token_admin);
+
+    let contract_id = env.register(TicketingContract, ());
+    let client = TicketingContractClient::new(&env, &contract_id);
+
+    // Setup calls are explicitly authorized via mock_auths (scoped to the
+    // single following invocation), rather than the blanket
+    // `env.mock_all_auths()` used elsewhere — that would make it impossible
+    // to later exercise a real authorization failure in this same env.
+    env.mock_auths(&[MockAuth {
+        address: &admin,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "initialize",
+            args: (admin.clone(), token_contract.address()).into_val(&env),
+            sub_invokes: &[],
+        },
+    }]);
+    client.initialize(&admin, &token_contract.address());
+
+    // No mock_auths call precedes this invocation: `unauthorized_caller`
+    // never authorized anything, and ticket #999 does not exist either.
+    // Both would independently make this call fail — the point is *which*
+    // failure surfaces.
+    let result = client.try_transfer_ticket(&unauthorized_caller, &999u64, &recipient);
+
+    match result {
+        Ok(_) => panic!("expected failure: caller never authorized this call"),
+        Err(Ok(contract_err)) => panic!(
+            "expected an authorization failure before business validation ran, \
+             but got contract error {contract_err:?} — auth must be checked first"
+        ),
+        Err(Err(_)) => {
+            // Host-level authorization failure, as required: reached before
+            // `get_ticket` could report `TicketNotFound`.
+        }
+    }
+}
+
+// ── Issue #205: failure propagation from token calls ────────────────────────
+//
+// A minimal token contract whose `transfer` always fails, standing in for a
+// real token misbehaving (frozen account, paused contract, insufficient
+// trustline, etc). Only `decimals` and `transfer` are implemented — the
+// only two token entry points this contract's purchase flow calls.
+#[contract]
+struct FailingToken;
+
+#[contractimpl]
+impl FailingToken {
+    pub fn decimals(_env: Env) -> u32 {
+        7
+    }
+
+    pub fn transfer(_env: Env, _from: Address, _to: Address, _amount: i128) {
+        panic!("simulated token transfer failure");
+    }
+}
+
+#[test]
+fn purchase_primary_leaves_no_partial_state_when_token_transfer_fails() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+
+    let failing_token = env.register(FailingToken, ());
+    client.set_event_payment_token(&organizer, &1, &Some(failing_token));
+
+    let buyer = Address::generate(&env);
+    let event_before = client.get_event(&1);
+
+    let result = client.try_purchase_primary(
+        &buyer,
+        &1,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "1"),
+        &1_000i128,
+    );
+    assert!(
+        result.is_err(),
+        "expected purchase_primary to fail when the token transfer fails"
+    );
+
+    // The token transfer happens before the ticket is minted and before
+    // `tickets_issued` is incremented. A failed transfer must not leave
+    // either half-applied: the event is unchanged, and no ticket exists.
+    let event_after = client.get_event(&1);
+    assert_eq!(
+        event_before, event_after,
+        "event state must be unchanged after a failed token transfer"
+    );
+    assert!(
+        client.try_get_ticket(&0).is_err(),
+        "no ticket should have been minted when the token transfer failed"
+    );
 }
