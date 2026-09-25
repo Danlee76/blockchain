@@ -23,3 +23,25 @@ scripts/setup-multisig-admin.sh <admin-identity> <network> <threshold> <signer-a
 Run it on testnet first and confirm an admin call (for example
 `set_purchase_throttle`) needs `<threshold>` signatures before doing the same
 on mainnet.
+
+## deploy.sh safety prompts (issue #228)
+
+`scripts/deploy.sh <identity> <network>` guards against accidental use:
+
+- **Dry run** — pass `--dry-run` to print the unsigned deployment
+  transaction (base64 XDR, via `stellar contract deploy --build-only`)
+  without submitting anything. Run it first to sanity-check the identity,
+  network and wasm before a real deploy on any network:
+
+  ```
+  scripts/deploy.sh <identity> mainnet --dry-run
+  ```
+
+- **Mainnet confirmation** — a real mainnet deploy pauses and requires
+  typing `confirm` at the prompt. Testnet/futurenet deployments submit
+  without a prompt.
+
+- **Scripted deploys** — pass `--yes` to skip the mainnet confirmation
+  once the deployment has been reviewed (e.g. in automation).
+
+The wasm path, identity and network are unchanged from the original script.
