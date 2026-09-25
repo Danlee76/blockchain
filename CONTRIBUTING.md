@@ -21,6 +21,96 @@ cargo test -p stellar-tickets-ticketing
 Keep commits scoped to one logical change. Prefer imperative subject
 lines ("Add resale price cap test" not "Added" or "Adding").
 
+## Writing contract tests
+
+Tests are organized in [`contracts/ticketing/src/test.rs`](contracts/ticketing/src/test.rs) and follow these patterns:
+
+### Setup function
+Use a `setup()` helper to initialize the test environment:
+
+```rust
+use soroban_sdk::testutils::{Address as _, Ledger, MockAuth};
+
+fn setup<'a>() -> (Env, TicketingContractClient<'a>, Address, Address) {
+    let env = Env::default();
+    env.mock_all_auths();  // allows any address to authorize
+    
+    let admin = Address::generate(&env);
+    let organizer = Address::generate(&env);
+    
+    let contract_id = env.register(TicketingContract, ());
+    let client = TicketingContractClient::new(&env, &contract_id);
+    client.initialize(&admin, &token_contract.address());
+    
+    (env, client, admin, organizer)
+}
+```
+
+### Testing authorization with mock_auths
+For functions requiring specific signatures, use `MockAuth`:
+
+```rust
+#[test]
+fn only_organizer_can_create_event() {
+    let (env, client, _admin, organizer) = setup();
+    let unauthorized = Address::generate(&env);
+    
+    // This succeeds — organizer is authorized
+    env.set_auths(&[MockAuth {
+        address: organizer.clone(),
+        invoke: MockAuthInvoke {
+            contract: contract_id,
+            fn_name: "create_event",
+            args: (...),
+            sub_invokes: vec![],
+        },
+    }]);
+    client.create_event(&organizer, ...);
+    
+    // This fails — unauthorized caller
+    env.set_auths(&[MockAuth {
+        address: unauthorized.clone(),
+        invoke: MockAuthInvoke { ... },
+    }]);
+    let result = client.try_create_event(&unauthorized, ...);
+    assert_eq!(result, Err(Ok(Error::NotOrganizer)));
+}
+```
+
+### Testing error cases
+Use `try_*` methods to capture errors:
+
+```rust
+#[test]
+fn revoked_ticket_cannot_transfer() {
+    let (env, client, _admin, organizer) = setup();
+    let owner = Address::generate(&env);
+    
+    let ticket_id = client.issue_ticket(&organizer, &1, &owner, ...);
+    client.revoke_ticket(&organizer, &ticket_id);
+    
+    let result = client.try_transfer_ticket(&owner, &ticket_id, &Address::generate(&env));
+    assert_eq!(result, Err(Ok(Error::Revoked)));
+}
+```
+
+### Ledger and time-based tests
+For tests involving ledger height or timestamps:
+
+```rust
+#[test]
+fn event_respects_ledger_ttl() {
+    let env = Env::default();
+    // Advance ledger
+    env.ledger().with_mut(|l| {
+        l.sequence_number = 1000;
+    });
+    // ... your test
+}
+```
+
+Each test should be focused, use generated addresses for isolation, and include assertions that verify both happy paths and error boundaries.
+
 ## Reporting issues
 
 Open a GitHub issue with a minimal reproduction — for contract bugs,
