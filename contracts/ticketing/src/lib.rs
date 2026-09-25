@@ -7,7 +7,7 @@ use soroban_sdk::{
 };
 
 #[contractevent]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TicketIssued {
     #[topic]
     pub ticket_id: u64,
@@ -15,7 +15,7 @@ pub struct TicketIssued {
 }
 
 #[contractevent]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ContractInitialized {
     #[topic]
     pub admin: Address,
@@ -23,7 +23,7 @@ pub struct ContractInitialized {
 }
 
 #[contractevent]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PurchaseThrottleUpdated {
     #[topic]
     pub admin: Address,
@@ -31,7 +31,7 @@ pub struct PurchaseThrottleUpdated {
 }
 
 #[contractevent]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaymentTokenProposed {
     #[topic]
     pub admin: Address,
@@ -40,7 +40,7 @@ pub struct PaymentTokenProposed {
 }
 
 #[contractevent]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaymentTokenChanged {
     #[topic]
     pub admin: Address,
@@ -49,7 +49,7 @@ pub struct PaymentTokenChanged {
 }
 
 #[contractevent]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TicketCheckedIn {
     #[topic]
     pub ticket_id: u64,
@@ -66,7 +66,7 @@ pub enum TicketStatus {
 }
 
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Event {
     pub organizer: Address,
     pub name: String,
@@ -100,7 +100,7 @@ pub struct Event {
 }
 
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Ticket {
     pub event_id: u64,
     pub owner: Address,
@@ -112,7 +112,7 @@ pub struct Ticket {
 }
 
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GiftClaim {
     pub from: Address,
     pub secret_hash: BytesN<32>,
@@ -187,6 +187,19 @@ pub const PAYMENT_TOKEN_CHANGE_DELAY_LEDGERS: u32 = 17_280;
 const LEDGER_BUMP: u32 = 535_679; // ~31 days at 5s/ledger, matches other Soroban tooling defaults
 const LEDGER_THRESHOLD: u32 = 500_000;
 
+/// # Authorization ordering (issue #206)
+///
+/// Every state-changing entry point below calls `require_auth()` as its
+/// very first statement, before any storage lookup or business-rule check
+/// (existence of a ticket/event, ownership, status, etc.). This ordering is
+/// deliberate: checking auth first means a caller who has not authorized
+/// the call learns nothing about contract state from the error they get
+/// back — not whether a ticket exists, who owns it, or what state it's in.
+/// Validating business rules before auth would leak that information to an
+/// unauthenticated caller through which error is returned. Keep this order
+/// when adding new entry points. See
+/// `require_auth_runs_before_business_validation` in `test.rs` for the
+/// regression test.
 #[contract]
 pub struct TicketingContract;
 
