@@ -1,11 +1,4 @@
-#![cfg(test)]
-
 use super::*;
-use soroban_sdk::{
-    testutils::Address as _,
-    token::{StellarAssetClient, TokenClient},
-    Address, Env, String,
-};
 
 pub struct TestContext<'a> {
     pub env: Env,
@@ -16,7 +9,6 @@ pub struct TestContext<'a> {
     pub organizer: Address,
 }
 
-/// Standard contract and token setup for ticketing tests.
 pub fn setup<'a>() -> (
     Env,
     TicketingContractClient<'a>,
@@ -43,7 +35,6 @@ pub fn setup<'a>() -> (
     (env, client, token, token_asset, admin, organizer)
 }
 
-/// Creates a default concert event with standard resale cap and royalty.
 pub fn make_event(env: &Env, client: &TicketingContractClient, organizer: &Address, event_id: u64) {
     client.create_event(
         organizer,
@@ -58,7 +49,6 @@ pub fn make_event(env: &Env, client: &TicketingContractClient, organizer: &Addre
     );
 }
 
-/// Creates an event with custom parameters.
 pub fn make_custom_event(
     env: &Env,
     client: &TicketingContractClient,
@@ -83,12 +73,10 @@ pub fn make_custom_event(
     );
 }
 
-/// Helper to mint tokens to an address.
 pub fn mint_tokens(token_asset: &StellarAssetClient, recipient: &Address, amount: i128) {
     token_asset.mint(recipient, &amount);
 }
 
-/// Helper to issue a standard GA ticket.
 pub fn issue_sample_ticket(
     env: &Env,
     client: &TicketingContractClient,
