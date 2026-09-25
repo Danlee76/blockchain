@@ -2070,3 +2070,125 @@ fn purchase_primary_leaves_no_partial_state_when_token_transfer_fails() {
         "no ticket should have been minted when the token transfer failed"
     );
 }
+
+#[test]
+fn events_with_identical_names_have_independent_state() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+
+    // Create event 1 and event 2 with the identical name and category
+    let event_name = String::from_str(&env, "Summer Music Festival 2026");
+    let category = String::from_str(&env, "concert");
+
+    client.create_event(
+        &organizer,
+        &101u64,
+        &event_name,
+        &category,
+        &12_000u32,
+        &500u32,
+        &10_000u64,
+        &100u64,
+        &200u64,
+    );
+
+    client.create_event(
+        &organizer,
+        &102u64,
+        &event_name,
+        &category,
+        &15_000u32,
+        &1_000u32,
+        &20_000u64,
+        &150u64,
+        &300u64,
+    );
+
+    let event1 = client.get_event(&101u64);
+    let event2 = client.get_event(&102u64);
+
+    assert_eq!(event1.name, event2.name);
+    assert_eq!(event1.category, event2.category);
+    assert_ne!(event1.starts_at, event2.starts_at);
+    assert_ne!(event1.max_resale_multiplier_bps, event2.max_resale_multiplier_bps);
+    assert_ne!(event1.royalty_bps, event2.royalty_bps);
+
+    let buyer1 = Address::generate(&env);
+    let buyer2 = Address::generate(&env);
+
+    let ticket1 = client.issue_ticket(
+        &organizer,
+        &101u64,
+        &buyer1,
+        &String::from_str(&env, "VIP"),
+        &String::from_str(&env, "Row 1"),
+        &10_000i128,
+    );
+
+    let ticket2 = client.issue_ticket(
+        &organizer,
+        &102u64,
+        &buyer2,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "Standing"),
+        &5_000i128,
+    );
+
+    assert_eq!(client.get_event(&101u64).tickets_issued, 1);
+    assert_eq!(client.get_event(&102u64).tickets_issued, 1);
+
+    // Check in ticket for event 1
+    client.check_in(&organizer, &ticket1);
+    assert_eq!(client.verify_ticket(&ticket1).status, TicketStatus::Used);
+    assert_eq!(client.verify_ticket(&ticket2).status, TicketStatus::Valid);
+}
+
+#[test]
+fn list_for_resale_after_cancel_succeeds_and_allows_purchase() {
+    let (env, client, token, token_asset, _admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+
+    let seller = Address::generate(&env);
+    let buyer = Address::generate(&env);
+
+    let ticket_id = client.issue_ticket(
+        &organizer,
+        &1,
+        &seller,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "unassigned"),
+        &1_000i128,
+    );
+
+    // Initial listing
+    client.list_for_resale(&seller, &ticket_id, &1_100i128);
+    let ticket_listed = client.verify_ticket(&ticket_id);
+    assert_eq!(ticket_listed.status, TicketStatus::Resale);
+    assert_eq!(ticket_listed.resale_price, 1_100i128);
+
+    // Cancel resale
+    client.cancel_resale(&seller, &ticket_id);
+    let ticket_cancelled = client.verify_ticket(&ticket_id);
+    assert_eq!(ticket_cancelled.status, TicketStatus::Valid);
+    assert_eq!(ticket_cancelled.resale_price, 0i128);
+
+    // Re-list for resale with updated price
+    client.list_for_resale(&seller, &ticket_id, &1_150i128);
+    let ticket_relisted = client.verify_ticket(&ticket_id);
+    assert_eq!(ticket_relisted.status, TicketStatus::Resale);
+    assert_eq!(ticket_relisted.resale_price, 1_150i128);
+
+    // Purchase by buyer
+    token_asset.mint(&buyer, &10_000i128);
+    client.buy_resale(&buyer, &ticket_id);
+
+    let ticket_bought = client.verify_ticket(&ticket_id);
+    assert_eq!(ticket_bought.owner, buyer);
+    assert_eq!(ticket_bought.status, TicketStatus::Valid);
+    assert_eq!(ticket_bought.resale_price, 0i128);
+
+    // 5% of 1150 = 57 to organizer, 1093 to seller
+    assert_eq!(token.balance(&organizer), 57);
+    assert_eq!(token.balance(&seller), 1093);
+    assert_eq!(token.balance(&buyer), 10_000 - 1150);
+}
+
