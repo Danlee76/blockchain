@@ -452,11 +452,7 @@ impl TicketingContract {
         if ticket.owner != from {
             return Err(Error::NotOwner);
         }
-        match ticket.status {
-            TicketStatus::Used => return Err(Error::AlreadyUsed),
-            TicketStatus::Revoked => return Err(Error::Revoked),
-            _ => {}
-        }
+        Self::ensure_active(&ticket)?;
         let event = Self::get_event(&env, ticket.event_id)?;
         if Self::transfer_frozen(&env, &event) {
             return Err(Error::TransfersFrozen);
@@ -489,11 +485,7 @@ impl TicketingContract {
             if ticket.owner != from {
                 return Err(Error::NotOwner);
             }
-            match ticket.status {
-                TicketStatus::Used => return Err(Error::AlreadyUsed),
-                TicketStatus::Revoked => return Err(Error::Revoked),
-                _ => {}
-            }
+            Self::ensure_active(&ticket)?;
             let event = Self::get_event(&env, ticket.event_id)?;
             if Self::transfer_frozen(&env, &event) {
                 return Err(Error::TransfersFrozen);
@@ -525,11 +517,7 @@ impl TicketingContract {
         if ticket.owner != owner {
             return Err(Error::NotOwner);
         }
-        match ticket.status {
-            TicketStatus::Used => return Err(Error::AlreadyUsed),
-            TicketStatus::Revoked => return Err(Error::Revoked),
-            _ => {}
-        }
+        Self::ensure_active(&ticket)?;
         if ticket.status == TicketStatus::Resale {
             ticket.status = TicketStatus::Valid;
             ticket.resale_price = 0;
@@ -575,11 +563,7 @@ impl TicketingContract {
         if ticket.owner != claim.from {
             return Err(Error::NotOwner);
         }
-        match ticket.status {
-            TicketStatus::Used => return Err(Error::AlreadyUsed),
-            TicketStatus::Revoked => return Err(Error::Revoked),
-            _ => {}
-        }
+        Self::ensure_active(&ticket)?;
 
         let event = Self::get_event(&env, ticket.event_id)?;
         if Self::transfer_frozen(&env, &event) {
@@ -637,11 +621,7 @@ impl TicketingContract {
         let mut ticket = Self::get_ticket(&env, ticket_id)?;
         let event = Self::get_event(&env, ticket.event_id)?;
         Self::require_organizer(&event, &organizer)?;
-        match ticket.status {
-            TicketStatus::Used => return Err(Error::AlreadyUsed),
-            TicketStatus::Revoked => return Err(Error::Revoked),
-            _ => {}
-        }
+        Self::ensure_active(&ticket)?;
         ticket.status = TicketStatus::Used;
         Self::remove_gift_claim(&env, ticket_id);
         Self::save_ticket(&env, ticket_id, &ticket);
@@ -667,11 +647,7 @@ impl TicketingContract {
             let mut ticket = Self::get_ticket(&env, ticket_id)?;
             let event = Self::get_event(&env, ticket.event_id)?;
             Self::require_organizer(&event, &organizer)?;
-            match ticket.status {
-                TicketStatus::Used => return Err(Error::AlreadyUsed),
-                TicketStatus::Revoked => return Err(Error::Revoked),
-                _ => {}
-            }
+            Self::ensure_active(&ticket)?;
             ticket.status = TicketStatus::Used;
             Self::remove_gift_claim(&env, ticket_id);
             Self::save_ticket(&env, ticket_id, &ticket);
@@ -771,11 +747,7 @@ impl TicketingContract {
         if ticket.owner != owner {
             return Err(Error::NotOwner);
         }
-        match ticket.status {
-            TicketStatus::Used => return Err(Error::AlreadyUsed),
-            TicketStatus::Revoked => return Err(Error::Revoked),
-            _ => {}
-        }
+        Self::ensure_active(&ticket)?;
         let event = Self::get_event(&env, ticket.event_id)?;
         if Self::resale_closed(&env, &event) {
             return Err(Error::ResaleClosed);
@@ -933,6 +905,14 @@ impl TicketingContract {
             return Err(Error::NotOrganizer);
         }
         Ok(())
+    }
+
+    fn ensure_active(ticket: &Ticket) -> Result<(), Error> {
+        match ticket.status {
+            TicketStatus::Used => Err(Error::AlreadyUsed),
+            TicketStatus::Revoked => Err(Error::Revoked),
+            _ => Ok(()),
+        }
     }
 
     /// Probes `token` with a `decimals()` call so an address that is not a
