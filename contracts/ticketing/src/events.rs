@@ -4,6 +4,7 @@ use soroban_sdk::{contractevent, Address};
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Emitted when a ticket is minted.
 pub struct TicketIssued {
     #[topic]
     pub ticket_id: u64,
@@ -12,6 +13,7 @@ pub struct TicketIssued {
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Emitted once when the contract is initialized.
 pub struct ContractInitialized {
     #[topic]
     pub admin: Address,
@@ -20,6 +22,7 @@ pub struct ContractInitialized {
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Emitted when the admin changes the purchase throttle.
 pub struct PurchaseThrottleUpdated {
     #[topic]
     pub admin: Address,
@@ -28,6 +31,7 @@ pub struct PurchaseThrottleUpdated {
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Emitted when the admin proposes a payment token change.
 pub struct PaymentTokenProposed {
     #[topic]
     pub admin: Address,
@@ -37,6 +41,7 @@ pub struct PaymentTokenProposed {
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Emitted when a proposed payment token change is applied.
 pub struct PaymentTokenChanged {
     #[topic]
     pub admin: Address,
@@ -46,6 +51,7 @@ pub struct PaymentTokenChanged {
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Emitted when a ticket is checked in at the point of entry.
 pub struct TicketCheckedIn {
     #[topic]
     pub ticket_id: u64,

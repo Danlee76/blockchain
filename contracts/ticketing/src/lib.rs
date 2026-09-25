@@ -1,4 +1,5 @@
 #![no_std]
+#![deny(missing_docs)]
 #![allow(clippy::too_many_arguments)]
 
 mod constants;
@@ -820,6 +821,11 @@ impl TicketingContract {
         Ok(())
     }
 
+    /// Fetches an event by its id.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::EventNotFound` when no event with `event_id` exists.
     pub fn get_event(env: &Env, event_id: u64) -> Result<Event, Error> {
         env.storage()
             .persistent()
@@ -827,6 +833,11 @@ impl TicketingContract {
             .ok_or(Error::EventNotFound)
     }
 
+    /// Fetches a ticket by its id.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::TicketNotFound` when no ticket with `ticket_id` exists.
     pub fn get_ticket(env: &Env, ticket_id: u64) -> Result<Ticket, Error> {
         env.storage()
             .persistent()
