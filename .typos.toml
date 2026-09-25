@@ -1,0 +1,2 @@
+[files]
+extend-exclude = ["Cargo.lock", "contracts/ticketing/test_snapshots/**"]
