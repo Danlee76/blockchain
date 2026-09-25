@@ -165,8 +165,8 @@ enum, so callers get a typed, stable error code rather than a panic string:
 
 **Prerequisites:**
 
-- [Rust](https://rustup.rs/) (stable channel — pinned via [`rust-toolchain.toml`](rust-toolchain.toml))
-- The `wasm32v1-none` target: `rustup target add wasm32v1-none`
+- [Rust](https://rustup.rs/) 1.70.0 or later (MSRV: 1.70.0, pinned via [`rust-toolchain.toml`](rust-toolchain.toml))
+- The `wasm32-unknown-unknown` target: `rustup target add wasm32-unknown-unknown`
 - The [Stellar CLI](https://developers.stellar.org/docs/tools/developer-tools) (`stellar`)
 
 ```bash
@@ -187,6 +187,34 @@ stellar contract build
 
 The build output lands at
 `target/wasm32v1-none/release/stellar_tickets_ticketing.wasm`.
+
+## Testnet setup and funding
+
+Before deploying, you'll need funded testnet accounts. The Stellar CLI can automate this:
+
+```bash
+# Create a new testnet identity and fund it via Friendbot (Stellar's faucet)
+stellar keys generate organizer --network testnet --fund
+```
+
+This command:
+1. Generates a new keypair and saves it locally
+2. Registers it with the testnet Friendbot faucet, which automatically funds new accounts with 10,000 XLM
+
+**If you already have a keypair and need to fund it separately**, you can call Friendbot directly:
+
+```bash
+# Fund an existing testnet account
+curl https://friendbot.stellar.org?addr=<your-public-key>
+```
+
+For account identity verification (useful in production or auditing contexts), your public key is displayed by:
+
+```bash
+stellar keys ls --network testnet
+```
+
+The Stellar CLI manages your secret keys securely — never paste or transmit them outside your environment.
 
 ## Testnet deployment walkthrough
 
