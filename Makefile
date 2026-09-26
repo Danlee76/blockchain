@@ -10,4 +10,4 @@ fmt:
 	cargo fmt --all
 
 lint:
-	cargo clippy --all-targets -- -D warnings
+	cargo clippy --all-targets -- -D warnings -W clippy::pedantic

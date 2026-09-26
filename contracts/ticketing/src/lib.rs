@@ -1,196 +1,22 @@
 #![no_std]
+#![deny(missing_docs)]
 #![allow(clippy::too_many_arguments)]
 
-use soroban_sdk::{
-    contract, contracterror, contractevent, contractimpl, contracttype, token, Address, Bytes,
-    BytesN, Env, String, Vec,
+mod constants;
+mod error;
+mod events;
+mod types;
+
+pub use constants::{BPS_DENOMINATOR, MAX_BATCH_SIZE, PAYMENT_TOKEN_CHANGE_DELAY_LEDGERS};
+pub use error::Error;
+pub use events::{
+    ContractInitialized, PaymentTokenChanged, PaymentTokenProposed, PurchaseThrottleUpdated,
+    TicketCheckedIn, TicketIssued,
 };
+pub use types::{DataKey, Event, GiftClaim, PendingPaymentToken, Ticket, TicketStatus};
 
-#[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TicketIssued {
-    #[topic]
-    pub ticket_id: u64,
-    pub event_id: u64,
-}
+use soroban_sdk::{contract, contractimpl, token, Address, Bytes, BytesN, Env, String, Vec};
 
-#[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ContractInitialized {
-    #[topic]
-    pub admin: Address,
-    pub payment_token: Address,
-}
-
-#[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PurchaseThrottleUpdated {
-    #[topic]
-    pub admin: Address,
-    pub min_ledger_spacing: u32,
-}
-
-#[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PaymentTokenProposed {
-    #[topic]
-    pub admin: Address,
-    pub new_token: Address,
-    pub apply_after_ledger: u32,
-}
-
-#[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PaymentTokenChanged {
-    #[topic]
-    pub admin: Address,
-    pub old_token: Address,
-    pub new_token: Address,
-}
-
-#[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TicketCheckedIn {
-    #[topic]
-    pub ticket_id: u64,
-    pub organizer: Address,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum TicketStatus {
-    Valid,
-    Used,
-    Revoked,
-    Resale,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Event {
-    pub organizer: Address,
-    pub name: String,
-    /// Category such as "concert", "flight", "sports", "conference", etc.
-    /// Kept as free text metadata rather than a fixed enum so new industries
-    /// don't require a contract migration.
-    pub category: String,
-    /// Basis points cap on resale price relative to original sale price
-    /// (e.g. 12000 = 120%). Anti-scalping enforcement.
-    pub max_resale_multiplier_bps: u32,
-    /// Optional floor on resale price relative to original price.
-    pub min_resale_multiplier_bps: Option<u32>,
-    /// Optional maximum number of ownership transfers for tickets in this event.
-    pub max_transfers_per_ticket: Option<u32>,
-    /// Basis points of every resale price paid to the organizer as royalty.
-    pub royalty_bps: u32,
-    pub tickets_issued: u64,
-    pub starts_at: u64,
-    pub transfer_freeze_seconds: u64,
-    pub resale_cutoff_seconds: u64,
-    /// When true, primary sale proceeds are held by the contract instead of
-    /// paid to the organizer immediately, and can only be released once the
-    /// ledger sequence reaches `escrow_release_ledger`.
-    pub escrow_enabled: bool,
-    /// Ledger sequence after which escrowed proceeds may be released.
-    /// Ignored when `escrow_enabled` is false.
-    pub escrow_release_ledger: u32,
-    /// Primary sale proceeds currently held in escrow for this event.
-    pub escrow_balance: i128,
-    /// Per-event accepted payment token (issue #235). `None` means the
-    /// event settles in the contract-wide payment token set at
-    /// initialization. Lockable only while no tickets have been issued so
-    /// existing sales stay denominated in the token they were paid in.
-    pub payment_token: Option<Address>,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Ticket {
-    pub event_id: u64,
-    pub owner: Address,
-    pub tier: String,
-    pub seat: String,
-    pub status: TicketStatus,
-    pub original_price: i128,
-    pub resale_price: i128,
-    pub transfers: u32,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct GiftClaim {
-    pub from: Address,
-    pub secret_hash: BytesN<32>,
-    pub expires_at: u64,
-}
-
-/// A payment token change that has been proposed but not yet applied.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PendingPaymentToken {
-    pub token: Address,
-    pub apply_after_ledger: u32,
-}
-
-#[contracttype]
-#[derive(Clone)]
-pub enum DataKey {
-    Admin,
-    PaymentToken,
-    TokenDecimals,
-    PendingPaymentToken,
-    Event(u64),
-    Ticket(u64),
-    GiftClaim(u64),
-    NextTicketId,
-    LastPurchaseLedger(Address),
-    MinPurchaseSpacing,
-}
-
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    AlreadyInitialized = 1,
-    NotInitialized = 2,
-    EventNotFound = 3,
-    EventAlreadyExists = 4,
-    TicketNotFound = 5,
-    NotOrganizer = 6,
-    NotOwner = 7,
-    AlreadyUsed = 8,
-    Revoked = 9,
-    NotForResale = 10,
-    ResalePriceExceedsCap = 11,
-    InvalidPrice = 12,
-    InvalidRoyalty = 13,
-    EscrowNotEnabled = 14,
-    EventNotEnded = 15,
-    PurchaseTooSoon = 16,
-    NotAdmin = 17,
-    EventAlreadyStarted = 18,
-    InvalidEventTime = 19,
-    TransfersFrozen = 20,
-    ResaleClosed = 21,
-    InvalidLottery = 22,
-    GiftClaimNotFound = 23,
-    GiftClaimExpired = 24,
-    InvalidSecret = 25,
-    InvalidExpiry = 26,
-    EmptyBatch = 27,
-    BatchTooLarge = 28,
-    InvalidPaymentToken = 29,
-    NoPendingPaymentToken = 30,
-    TimelockNotElapsed = 31,
-    TicketsAlreadyIssued = 32,
-    TransferLimitExceeded = 33,
-    ResalePriceBelowFloor = 34,
-}
-
-pub const MAX_BATCH_SIZE: u32 = 50;
-/// Ledgers that must pass between proposing and applying a payment token
-/// change (~1 day at 5s/ledger).
-pub const PAYMENT_TOKEN_CHANGE_DELAY_LEDGERS: u32 = 17_280;
 const LEDGER_BUMP: u32 = 535_679; // ~31 days at 5s/ledger, matches other Soroban tooling defaults
 const LEDGER_THRESHOLD: u32 = 500_000;
 

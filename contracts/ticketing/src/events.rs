@@ -1,0 +1,59 @@
+//! Contract events emitted by the ticketing contract.
+
+use soroban_sdk::{contractevent, Address};
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// Emitted when a ticket is minted.
+pub struct TicketIssued {
+    #[topic]
+    pub ticket_id: u64,
+    pub event_id: u64,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// Emitted once when the contract is initialized.
+pub struct ContractInitialized {
+    #[topic]
+    pub admin: Address,
+    pub payment_token: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// Emitted when the admin changes the purchase throttle.
+pub struct PurchaseThrottleUpdated {
+    #[topic]
+    pub admin: Address,
+    pub min_ledger_spacing: u32,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// Emitted when the admin proposes a payment token change.
+pub struct PaymentTokenProposed {
+    #[topic]
+    pub admin: Address,
+    pub new_token: Address,
+    pub apply_after_ledger: u32,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// Emitted when a proposed payment token change is applied.
+pub struct PaymentTokenChanged {
+    #[topic]
+    pub admin: Address,
+    pub old_token: Address,
+    pub new_token: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// Emitted when a ticket is checked in at the point of entry.
+pub struct TicketCheckedIn {
+    #[topic]
+    pub ticket_id: u64,
+    pub organizer: Address,
+}
